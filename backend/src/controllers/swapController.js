@@ -33,9 +33,10 @@ async function createSwapRequest(req, res, next) {
       }
     });
     await prisma.event.updateMany({
-      where: { id: { in: [mySlot.id, theirSlot.id] } },
-      data: { status: 'SWAP_PENDING', swapRequestId: swap.id }
-    });
+  where: { id: { in: [mySlot.id, theirSlot.id] } },
+  data: { status: 'SWAP_PENDING' }
+});
+
 
     emitToUser(theirSlot.ownerId, { type: 'swap_request', data: swap });
 
@@ -57,9 +58,10 @@ async function respondToSwap(req, res, next) {
     if (!accept) {
       await prisma.swapRequest.update({ where: { id: requestId }, data: { status: 'REJECTED' }});
       await prisma.event.updateMany({
-        where: { id: { in: [swap.offeredEventId, swap.requestedEventId] } },
-        data: { status: 'SWAPPABLE', swapRequestId: null }
-      });
+  where: { id: { in: [swap.offeredEventId, swap.requestedEventId] } },
+  data: { status: 'SWAPPABLE' }
+});
+
       emitToUser(swap.requesterId, { type: 'swap_rejected', data: { id: requestId }});
       return res.json({ message: 'Rejected' });
     }
