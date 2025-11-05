@@ -12,7 +12,14 @@ model User {
   name       String
   email      String   @unique
   password   String
+
+  // user's events
   events     Event[]
+
+  // explicit back-relations for swap requests (two separate relationships)
+  swapRequestsMade     SwapRequest[] @relation("SwapRequester")
+  swapRequestsReceived SwapRequest[] @relation("SwapResponder")
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   refreshToken String?
@@ -24,12 +31,17 @@ model Event {
   startTime  DateTime
   endTime    DateTime
   status     EventStatus @default(BUSY)
+
   owner      User     @relation(fields: [ownerId], references: [id])
   ownerId    String
+
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
-  swapRequest SwapRequest? @relation(fields: [swapRequestId], references: [id])
-  swapRequestId String?
+
+  // Optional back-relations to swap requests where this event is used as offered/requested.
+  // These are arrays because an event could have multiple historical swap attempts.
+  offeredIn   SwapRequest[] @relation("OfferedEvent")
+  requestedIn SwapRequest[] @relation("RequestedEvent")
 }
 
 model SwapRequest {
@@ -42,10 +54,13 @@ model SwapRequest {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
-  offeredEvent     Event @relation("offeredEvent", fields: [offeredEventId], references: [id])
-  requestedEvent   Event @relation("requestedEvent", fields: [requestedEventId], references: [id])
-  requester        User  @relation(fields: [requesterId], references: [id])
-  responder        User? @relation(fields: [responderId], references: [id])
+  // relations to Event (named)
+  offeredEvent     Event         @relation("OfferedEvent", fields: [offeredEventId], references: [id])
+  requestedEvent   Event         @relation("RequestedEvent", fields: [requestedEventId], references: [id])
+
+  // two separate relations to User must have distinct names
+  requester        User          @relation("SwapRequester", fields: [requesterId], references: [id])
+  responder        User?         @relation("SwapResponder", fields: [responderId], references: [id])
 }
 
 enum EventStatus {
