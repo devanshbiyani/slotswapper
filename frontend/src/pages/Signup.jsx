@@ -14,10 +14,7 @@ export default function Signup() {
     e.preventDefault();
     setErr(null);
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE || 'https://slotswapper-backend.onrender.com/api';
-      const res = await axios.post(`${API_BASE}/auth/signup`, {
-        name, email, password
-      }, { headers: { 'Content-Type': 'application/json' }});
+      const res = await axios.post('https://slotswapper-backend.onrender.com/api/auth/signup', { name, email, password }, { headers: { 'Content-Type': 'application/json' }});
       const token = res.data.token || res.data?.data?.token;
       if (token) {
         localStorage.setItem('token', token);
