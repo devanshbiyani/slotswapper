@@ -26,6 +26,7 @@ export default function Login(){
         <input className="block w-full p-2 my-2" placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
         <button className="btn" type="submit">Login</button>
       </form>
+<p className="mt-2">Don't have an account? <a href="/signup" className="text-blue-600">Sign up</a></p>
     </div>
   );
 }
