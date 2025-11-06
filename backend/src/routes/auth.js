@@ -1,111 +1,69 @@
 // backend/routes/auth.js
-// CommonJS module to match your app.js `require()` usage.
-// Provides POST /signup and POST /login using Prisma, bcrypt and JWT.
-// Make sure you have these packages installed: @prisma/client, bcrypt, jsonwebtoken
-
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const { PrismaClient } = require('@prisma/client');
 
-// Try to require Prisma client (if present). If not present, throw helpful error at runtime.
-let prisma;
-try {
-  const { PrismaClient } = require('@prisma/client');
-  prisma = new PrismaClient();
-} catch (e) {
-  // prisma might not be installed in some environments; keep prisma undefined and give clear message if used.
-  prisma = null;
-}
+const prisma = new PrismaClient();
 
-// Helpers
-const ensurePrisma = () => {
-  if (!prisma) {
-    const err = new Error('Prisma client is not available. Install @prisma/client and set DATABASE_URL.');
-    err.status = 500;
-    throw err;
-  }
-};
-
-const bcrypt = (() => {
-  try { return require('bcrypt'); } catch (e) { return null; }
-})();
-
-const jwt = (() => {
-  try { return require('jsonwebtoken'); } catch (e) { return null; }
-})();
-
-const createToken = (payload) => {
-  const secret = process.env.JWT_SECRET || 'dev-secret';
-  if (!jwt) throw new Error('jsonwebtoken not installed');
-  return jwt.sign(payload, secret, { expiresIn: '7d' });
-};
-
-// POST /signup
-router.post('/signup', async (req, res, next) => {
+// POST /api/auth/signup
+router.post('/signup', async (req, res) => {
   try {
-    ensurePrisma();
+    const { name, email, password } = req.body;
 
-    const { name, email, password } = req.body || {};
     if (!name || !email || !password) {
-      return res.status(400).json({ message: 'name, email and password are required' });
+      return res.status(400).json({ message: 'All fields are required.' });
     }
 
-    // check existing user
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return res.status(409).json({ message: 'User already exists' });
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({ message: 'User already exists.' });
     }
 
-    if (!bcrypt) {
-      return res.status(500).json({ message: 'bcrypt not installed on server' });
-    }
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const hashed = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashed
-      },
-      select: { id: true, name: true, email: true }
+    const newUser = await prisma.user.create({
+      data: { name, email, password: hashedPassword },
     });
 
-    // create token
-    if (!jwt) {
-      // return user without token if jsonwebtoken missing
-      return res.status(201).json({ user, message: 'User created but JWT not available (jsonwebtoken not installed).' });
-    }
+    const token = jwt.sign(
+      { id: newUser.id, email: newUser.email },
+      process.env.JWT_SECRET || 'dev-secret',
+      { expiresIn: '7d' }
+    );
 
-    const token = createToken({ id: user.id, email: user.email });
-    return res.status(201).json({ token, user });
+    res.status(201).json({ token, user: { id: newUser.id, name, email } });
   } catch (err) {
-    next(err);
+    console.error('Signup error:', err);
+    res.status(500).json({ message: 'Internal server error.' });
   }
 });
 
-// POST /login
-router.post('/login', async (req, res, next) => {
+// POST /api/auth/login
+router.post('/login', async (req, res) => {
   try {
-    ensurePrisma();
-
-    const { email, password } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({ message: 'email and password are required' });
-    }
+    const { email, password } = req.body;
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(401).json({ message: 'Invalid credentials' });
 
-    if (!bcrypt) return res.status(500).json({ message: 'bcrypt not installed on server' });
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(401).json({ message: 'Invalid credentials' });
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ message: 'Invalid credentials' });
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET || 'dev-secret',
+      { expiresIn: '7d' }
+    );
 
-    if (!jwt) return res.status(200).json({ user: { id: user.id, name: user.name, email: user.email } });
-
-    const token = createToken({ id: user.id, email: user.email });
-    return res.status(200).json({ token, user: { id: user.id, name: user.name, email: user.email } });
+    res.status(200).json({
+      token,
+      user: { id: user.id, name: user.name, email: user.email },
+    });
   } catch (err) {
-    next(err);
+    console.error('Login error:', err);
+    res.status(500).json({ message: 'Internal server error.' });
   }
 });
 
